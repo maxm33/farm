@@ -5,7 +5,7 @@
 This is the project I was given as final exam for the Laboratory 2 course.
 
 The main focus of this project is to implement a concurrent multithreaded system and manage possible race conditions
-with the help Mutexes, Atomicity and Condition Variables.
+with the help of Mutexes, Atomicity and Condition Variables.
 
 _farm_ is a program in which there are 2 processes: [MasterWorker](#masterworker) (main) and [Collector](#collector) (child process).
 
