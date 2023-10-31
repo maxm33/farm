@@ -66,10 +66,10 @@ int main(int argc, char *argv[])
   // blocking all signals
   checkErr(pthread_sigmask(SIG_SETMASK, &set, NULL));
   checkErr(sigemptyset(&set));
-  sigaddset(&set, SIGINT);
-  sigaddset(&set, SIGQUIT);
-  sigaddset(&set, SIGTERM);
-  sigaddset(&set, SIGHUP);
+  checkErr(sigaddset(&set, SIGINT));
+  checkErr(sigaddset(&set, SIGQUIT));
+  checkErr(sigaddset(&set, SIGTERM));
+  checkErr(sigaddset(&set, SIGHUP));
   s.sa_mask = set;
   s.sa_handler = &sighandler;
   s.sa_flags = SA_RESTART;
@@ -131,6 +131,7 @@ int main(int argc, char *argv[])
   strncpy(server.sun_path, SOCKNAME, UNIX_PATH_MAX);
   server.sun_family = AF_UNIX;
 
+  // child process
   pid_t Collector = fork();
   if (Collector == 0)
   {
@@ -142,10 +143,10 @@ int main(int argc, char *argv[])
 
     // blocking SIGHUP, SIGINT, SIGQUIT, SIGTERM
     checkErr(sigemptyset(&set2));
-    sigaddset(&set2, SIGINT);
-    sigaddset(&set2, SIGQUIT);
-    sigaddset(&set2, SIGTERM);
-    sigaddset(&set2, SIGHUP);
+    checkErr(sigaddset(&set2, SIGINT));
+    checkErr(sigaddset(&set2, SIGQUIT));
+    checkErr(sigaddset(&set2, SIGTERM));
+    checkErr(sigaddset(&set2, SIGHUP));
     checkErr(pthread_sigmask(SIG_BLOCK, &set2, NULL));
     /*
       freeing the multidimensional array containing files, dont need here in
@@ -166,8 +167,7 @@ int main(int argc, char *argv[])
 
     while (j > 0)
     {
-      int ret = read(fd_c, &collected, sizeof(Datastruct));
-      checkErr(ret);
+      checkErr(read(fd_c, &collected, sizeof(Datastruct)));
       /*
         When a signal is received by masterworker, if there are threads that are
         already in queue (usually it's the case), those threads finish to work
@@ -288,8 +288,7 @@ void *func(void *arg)
     strcpy(data.filename, processedfile);
     data.result = result;
 
-    int ret = write(fd_skt, &data, sizeof(data)); // sends results to collector
-    checkErr(ret);
+    checkErr(write(fd_skt, &data, sizeof(data))); // sends results to collector
 
     free(processedfile); // free dynamic memory used
     result = 0;

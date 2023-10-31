@@ -48,3 +48,5 @@ in the command prompt, while in the main folder, should do the trick.
 - -n < integer > : number of threads used (default is 4).
 - -q < integer > : max number of requests that can be made by MasterWorker at the same time, or max number of files that can be processed simultaneously (default is 8).
 - -t < integer > : the delay between each request made by MasterWorker (in milliseconds, default is 0).
+
+**Note** This program only works on UNIX 64-bit systems.
