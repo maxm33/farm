@@ -26,4 +26,4 @@ gcc -pthread -o generafile generafile.c
 - t is the delay between each request made by MasterWorker (in milliseconds, default is 0).
 
 > [!NOTE]
-> None of these options are mandatory
+> None of these options are mandatory.
