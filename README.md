@@ -1,6 +1,8 @@
 # Farm
 
-**_Please read "Project_description.pdf" to learn about the project_**
+> [!IMPORTANT]
+>  - Please read &ensp;_Project_description.pdf_&ensp; to learn about the project.<br>
+>  - This program works as intended only on UNIX 64-bit systems.
 
 ## Usage
 
@@ -23,6 +25,5 @@ gcc -pthread -o generafile generafile.c
 - q is the max requests that can be made by MasterWorker at the same time, or max files that can be processed simultaneously (default is 8).
 - t is the delay between each request made by MasterWorker (in milliseconds, default is 0).
 
-(None of these options are mandatory)
-
-**Important note:** This program only works on UNIX 64-bit systems.
+> [!NOTE]
+> None of these options are mandatory
