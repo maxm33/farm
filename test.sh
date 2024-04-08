@@ -1,19 +1,16 @@
 #!/bin/bash
 
-if [ ! -e generafile ];
-then
-    echo "Compilare generafile, eseguibile mancante!";
+if [ ! -e generafile ]; then
+    echo "Compilare generafile, eseguibile mancante!"
     exit 1
 fi
-if [ ! -e farm ];
-then
+
+if [ ! -e farm ]; then
     echo "Compilare farm, eseguibile mancante!"
     exit 1
 fi
-#
-# il file expected.txt contiene i risultati attesi per i file
-# generati nel seguito con il programma generafile
-#
+
+# il file expected.txt contiene i risultati attesi per i file generati con generafile
 cat > expected.txt <<EOF
 64834211 file100.dat
 103453975 file2.dat
@@ -37,12 +34,11 @@ cat > expected.txt <<EOF
 2322416554 file18.dat
 2560452408 file20.dat
 EOF
-#
-# generafile genera i file file100.dat file150.dat file19.dat file116.dat...
-# in modo deterministico
-#
+
+# generafile genera i file file100.dat file150.dat file19.dat file116.dat... in modo deterministico
 j=1
-for i in 100 150 19 116 2 1 117 3 5 17 4 16 19 8 10 111 12 13 14 15 18 20; do
+for i in 100 150 19 116 2 1 117 3 5 17 4 16 19 8 10 111 12 13 14 15 18 20
+do
     ./generafile file$i.dat $(($i*11 + $j*117)) > /dev/null
     j=$(($j+3))
 done
@@ -62,10 +58,8 @@ if [[ $? != 0 ]]; then
 else
     echo "test2 passed"
 fi
-#
-# esecuzione "rallentata" con 1 thread, dopo circa 5 secondi viene
-# inviato il segnale SIGTERM (comando pkill) e si valuta l'exit status
-# 
+
+# esecuzione "rallentata" con 1 thread, dopo 5 secondi viene inviato il segnale SIGTERM (pkill) e si valuta l'exit status
 ./farm -n 1 -q 1 -t 1000 file* 2>&1 > /dev/null &
 pid=$!
 sleep 5
@@ -76,10 +70,8 @@ if [[ $? != 0 ]]; then
 else
     echo "test3 passed"
 fi
-#
-# esecuzione con valgrind. Se valgrind trova dei problemi esce con 
-# exit status 1.
-#
+
+# esecuzione con valgrind. Se valgrind trova dei problemi esce con exit status 1
 valgrind --error-exitcode=1 --log-file=/dev/null ./farm file* 2>&1 > /dev/null
 if [[ $? != 0 ]]; then
     echo "test4 failed"
@@ -87,7 +79,7 @@ else
     echo "test4 passed"
 fi
 
-# possibile altro comando per verificare eventuali memory leaks
+# altro test per verificare eventuali memory leaks
 valgrind --leak-check=full --error-exitcode=1 --log-file=log.txt ./farm file* 2>&1 > /dev/null
 if [[ $? != 0 ]]; then
     echo "test5 failed"
