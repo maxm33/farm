@@ -15,7 +15,7 @@ make
 
 OR
 
-- Compile and run
+- Compile and run (check the available options) 
 
 ```
 gcc -pthread -o farm farm.c
@@ -24,6 +24,6 @@ gcc -pthread -o farm farm.c
 
 ## Options
 
-- `n` is the number of threads used (default is 4).
-- `q` is the max requests that can be made by MasterWorker at the same time, or max files that can be processed simultaneously (default is 8).
-- `t` is the delay between each request made by MasterWorker (in milliseconds, default is 0).
+- `-n <number>` to set the number of threads used (default is 4);
+- `-q <number>` to set a limit to requests that can be made by MasterWorker at once (default is 8);
+- `-t <number>` to set a delay (in milliseconds) in between each request made by MasterWorker (default is 0).
