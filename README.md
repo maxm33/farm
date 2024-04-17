@@ -19,7 +19,7 @@ OR
 
 ```
 gcc -pthread -o farm farm.c
-./farm <path-to-file(s)>
+./farm <option(s)> <path-to-file(s)>
 ```
 
 ## Options
