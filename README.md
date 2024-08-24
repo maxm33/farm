@@ -1,15 +1,19 @@
 # Farm
 
-This is the final project for Laboratory 2 course.
+This was the final assignment for Laboratory 2 course.
+
+<br>
 
 > [!IMPORTANT]
 >
-> - Please read &ensp;_Project_description.pdf_&ensp; to learn about the project.<br>
+> - Please read &ensp;_Project_description.pdf_&ensp; to learn about the assignment.<br>
 > - This program works as intended only on Unix-like 64-bit systems.
+
+<br>
 
 ## Usage
 
-- This will run pre-built tests
+- Run pre-built tests
 
 ```
 make
@@ -23,6 +27,8 @@ OR
 gcc -pthread -o farm farm.c
 ./farm <option(s)> <path-to-file(s)>
 ```
+
+<br>
 
 ## Options
 
