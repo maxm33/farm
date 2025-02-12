@@ -12,38 +12,39 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define UNIX_PATH_MAX 108
 #define MAX_STRING_SIZE 255
 #define SOCKNAME "./farm.sck"
-#define UNIX_PATH_MAX 108
 
 typedef struct
 {
   long result;
   char filename[MAX_STRING_SIZE];
-} Datastruct;
-
-void *func(void *arg);
+} Data;
 
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex3 = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t fullq = PTHREAD_COND_INITIALIZER; // condition variable
+pthread_cond_t isFull = PTHREAD_COND_INITIALIZER; // condition variable
 
 struct sockaddr_un server;
-int qlen = 8, activeWorkers = 0, numfiles = 0, fd_skt, delay = 0;
+int numThread = 4, queueLength = 8, activeWorkers = 0, numFiles = 0, fd_skt, delay = 0, j = 0;
 char **files;
 
+// threads function
+void *elaborate(void *arg);
+
 // when signal is received, execution of the program is forced to end
-void sighandler(int sign)
+void handler(int signal)
 {
   pthread_mutex_lock(&mutex1);
-  numfiles = 0;
+  numFiles = 0;
   pthread_mutex_unlock(&mutex1);
 }
 
-void checkErr(int num)
+void checkErr(int n)
 {
-  if (num == -1)
+  if (n == -1)
   {
     perror("Operation failed");
     exit(EXIT_FAILURE);
@@ -62,6 +63,8 @@ int main(int argc, char *argv[])
   // install SIGHUP, SIGINT, SIGQUIT, SIGTERM handlers
   sigset_t set;
   struct sigaction s;
+  struct stat *buffer;
+
   checkErr(sigfillset(&set));
   // blocking all signals
   checkErr(pthread_sigmask(SIG_SETMASK, &set, NULL));
@@ -71,7 +74,7 @@ int main(int argc, char *argv[])
   checkErr(sigaddset(&set, SIGTERM));
   checkErr(sigaddset(&set, SIGHUP));
   s.sa_mask = set;
-  s.sa_handler = &sighandler;
+  s.sa_handler = &handler;
   s.sa_flags = SA_RESTART;
   checkErr(sigaction(SIGINT, &s, NULL));
   checkErr(sigaction(SIGQUIT, &s, NULL));
@@ -81,22 +84,20 @@ int main(int argc, char *argv[])
   // no signal is blocked now
   checkErr(pthread_sigmask(SIG_SETMASK, &set, NULL));
 
-  int threadnum = 4, j = 0;
   files = (char **)malloc(sizeof(char *));
-  struct stat *buf;
-  buf = (struct stat *)malloc(sizeof(struct stat));
+  buffer = (struct stat *)malloc(sizeof(struct stat));
 
   // program menu options: -n, -q, -t
   for (int i = 1; i < argc; i++)
   {
     if (strcmp(argv[i], "-n") == 0)
     {
-      threadnum = atoi(argv[i + 1]); // sets number of threads, default is 4
+      numThread = atoi(argv[i + 1]); // sets number of threads, default is 4
       i++;
     }
     else if (strcmp(argv[i], "-q") == 0)
     {
-      qlen = atoi(argv[i + 1]); // sets queue length, default is 8
+      queueLength = atoi(argv[i + 1]); // sets queue length, default is 8
       i++;
     }
     else if (strcmp(argv[i], "-t") == 0)
@@ -111,8 +112,8 @@ int main(int argc, char *argv[])
         // printf("File '%s' exceeded the max filename length\n", argv[i]);
         continue;
       }
-      checkErr(stat(argv[i], buf));
-      if (!S_ISREG(buf->st_mode))
+      checkErr(stat(argv[i], buffer));
+      if (!S_ISREG(buffer->st_mode))
       { // skips file if not regular
         // printf("File '%s' is not regular\n", argv[i]);
         continue;
@@ -125,8 +126,8 @@ int main(int argc, char *argv[])
       j++;
     }
   }
-  numfiles = j;
-  free(buf);
+  numFiles = j;
+  free(buffer);
 
   strncpy(server.sun_path, SOCKNAME, UNIX_PATH_MAX);
   server.sun_family = AF_UNIX;
@@ -135,11 +136,10 @@ int main(int argc, char *argv[])
   pid_t Collector = fork();
   if (Collector == 0)
   {
+    Data collected;
     sigset_t set2;
     int s_sck, fd_c;
-    Datastruct collected;
-
-    char prevbadoutput[MAX_STRING_SIZE] = ".";
+    char prevbadoutput[MAX_STRING_SIZE] = "";
 
     // blocking SIGHUP, SIGINT, SIGQUIT, SIGTERM
     checkErr(sigemptyset(&set2));
@@ -148,17 +148,6 @@ int main(int argc, char *argv[])
     checkErr(sigaddset(&set2, SIGTERM));
     checkErr(sigaddset(&set2, SIGHUP));
     checkErr(pthread_sigmask(SIG_BLOCK, &set2, NULL));
-    /*
-      freeing the multidimensional array containing files, dont need here in
-      collector. It couldn't be done before forking because the list of files is
-      created when taking the parameters, and there are some other data that is
-      useful to be shared to the child process. So it is freed after instead.
-    */
-    for (int i = 0; i < j; i++)
-    {
-      free(files[i]);
-    }
-    free(files);
 
     s_sck = socket(AF_UNIX, SOCK_STREAM, 0);
     bind(s_sck, (struct sockaddr *)&server, sizeof(server));
@@ -167,7 +156,7 @@ int main(int argc, char *argv[])
 
     while (j > 0)
     {
-      checkErr(read(fd_c, &collected, sizeof(Datastruct)));
+      checkErr(read(fd_c, &collected, sizeof(Data)));
       /*
         When a signal is received by masterworker, if there are threads that are
         already in queue (usually it's the case), those threads finish to work
@@ -182,6 +171,7 @@ int main(int argc, char *argv[])
       strcpy(prevbadoutput, collected.filename);
       j--;
     }
+
     close(fd_c);
     close(s_sck);
     unlink(SOCKNAME);
@@ -206,12 +196,14 @@ int main(int argc, char *argv[])
   // masterworker and collector are connected now
 
   // creating and waiting all the thread workers
-  pthread_t tid[threadnum];
-  for (int i = 0; i < threadnum; i++)
+  pthread_t tid[numThread];
+
+  for (int i = 0; i < numThread; i++)
   {
-    pthread_create(&tid[i], NULL, func, NULL);
+    pthread_create(&tid[i], NULL, elaborate, NULL);
   }
-  for (int i = 0; i < threadnum; i++)
+
+  for (int i = 0; i < numThread; i++)
   {
     pthread_join(tid[i], NULL);
   }
@@ -229,28 +221,31 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-void *func(void *arg)
+void *elaborate(void *arg)
 {
-  int filesize = 0;
-  long num = 0, result = 0;
-  char *processedfile;
-  struct stat *buf;
-  Datastruct data = {};
+  int fileSize = 0;
+  long n = 0, result = 0;
+  char *processedFile;
+  struct stat *buffer;
+  Data data = {};
   FILE *fd;
+
   while (1)
   {
     pthread_mutex_lock(&mutex1);
-    if (numfiles <= 0)
+    if (numFiles <= 0)
     { // checks if there are any files left in the array...
       pthread_mutex_unlock(&mutex1);
       pthread_exit(NULL); // if not, thread is terminated
     }
-    processedfile = (char *)malloc(strlen(files[numfiles - 1]) * sizeof(char) + 1);
-    strcpy(processedfile, files[numfiles - 1]); // gets filename
-    numfiles--;
-    while (activeWorkers >= qlen)
-    {                                     // if queue is full...
-      pthread_cond_wait(&fullq, &mutex1); // ...thread goes in waiting
+
+    processedFile = (char *)malloc(strlen(files[numFiles - 1]) * sizeof(char) + 1);
+    strcpy(processedFile, files[numFiles - 1]); // gets filename
+    numFiles--;
+
+    while (activeWorkers >= queueLength)
+    {                                      // if queue is full...
+      pthread_cond_wait(&isFull, &mutex1); // ...thread goes in waiting
     }
     activeWorkers++; // thread is actually working now
     pthread_mutex_unlock(&mutex1);
@@ -259,14 +254,14 @@ void *func(void *arg)
     usleep(delay * 1000);        // worker waits delay time (in milliseconds)
     pthread_mutex_unlock(&mutex2);
 
-    buf = (struct stat *)calloc(1, sizeof(struct stat));
+    buffer = (struct stat *)calloc(1, sizeof(struct stat));
 
-    checkErr(stat(processedfile, buf));
-    filesize = buf->st_size;
+    checkErr(stat(processedFile, buffer));
+    fileSize = buffer->st_size;
 
-    free(buf); // free dynamic memory used
+    free(buffer); // free dynamic memory used
 
-    fd = fopen(processedfile, "rb"); // opens binary file
+    fd = fopen(processedFile, "rb"); // opens binary file
     if (!fd)
     {
       perror("fopen() failed");
@@ -277,21 +272,22 @@ void *func(void *arg)
     to the final result
     */
     fseek(fd, 0, SEEK_SET);
-    for (int i = 0; i < filesize / sizeof(long); i++)
+    for (int i = 0; i < fileSize / sizeof(long); i++)
     {
-      fread(&num, sizeof(long), 1, fd);
-      result = result + (i * num);
+      fread(&n, sizeof(long), 1, fd);
+      result = result + (i * n);
     }
     fclose(fd);
 
     // copying results to custom structure
-    strcpy(data.filename, processedfile);
+    strcpy(data.filename, processedFile);
     data.result = result;
 
     checkErr(write(fd_skt, &data, sizeof(data))); // sends results to collector
 
-    free(processedfile); // free dynamic memory used
+    free(processedFile); // free dynamic memory used
     result = 0;
+
     /*
     thread gets lock and, as it finishes working by sending the result to
     collector, signals to unlock the first thread in the waiting queue, then
@@ -299,7 +295,7 @@ void *func(void *arg)
     */
     pthread_mutex_lock(&mutex3);
     activeWorkers--;
-    pthread_cond_signal(&fullq);
+    pthread_cond_signal(&isFull);
     pthread_mutex_unlock(&mutex3);
   }
 }
