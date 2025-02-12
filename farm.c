@@ -42,7 +42,7 @@ void handler(int signal)
   pthread_mutex_unlock(&mutex1);
 }
 
-void checkErr(int n)
+void checkFailure(int n)
 {
   if (n == -1)
   {
@@ -65,24 +65,24 @@ int main(int argc, char *argv[])
   struct sigaction s;
   struct stat *buffer;
 
-  checkErr(sigfillset(&set));
+  checkFailure(sigfillset(&set));
   // blocking all signals
-  checkErr(pthread_sigmask(SIG_SETMASK, &set, NULL));
-  checkErr(sigemptyset(&set));
-  checkErr(sigaddset(&set, SIGINT));
-  checkErr(sigaddset(&set, SIGQUIT));
-  checkErr(sigaddset(&set, SIGTERM));
-  checkErr(sigaddset(&set, SIGHUP));
+  checkFailure(pthread_sigmask(SIG_SETMASK, &set, NULL));
+  checkFailure(sigemptyset(&set));
+  checkFailure(sigaddset(&set, SIGINT));
+  checkFailure(sigaddset(&set, SIGQUIT));
+  checkFailure(sigaddset(&set, SIGTERM));
+  checkFailure(sigaddset(&set, SIGHUP));
   s.sa_mask = set;
   s.sa_handler = &handler;
   s.sa_flags = SA_RESTART;
-  checkErr(sigaction(SIGINT, &s, NULL));
-  checkErr(sigaction(SIGQUIT, &s, NULL));
-  checkErr(sigaction(SIGHUP, &s, NULL));
-  checkErr(sigaction(SIGTERM, &s, NULL));
-  checkErr(sigemptyset(&set));
+  checkFailure(sigaction(SIGINT, &s, NULL));
+  checkFailure(sigaction(SIGQUIT, &s, NULL));
+  checkFailure(sigaction(SIGHUP, &s, NULL));
+  checkFailure(sigaction(SIGTERM, &s, NULL));
+  checkFailure(sigemptyset(&set));
   // no signal is blocked now
-  checkErr(pthread_sigmask(SIG_SETMASK, &set, NULL));
+  checkFailure(pthread_sigmask(SIG_SETMASK, &set, NULL));
 
   files = (char **)malloc(sizeof(char *));
   buffer = (struct stat *)malloc(sizeof(struct stat));
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
         // printf("File '%s' exceeded the max filename length\n", argv[i]);
         continue;
       }
-      checkErr(stat(argv[i], buffer));
+      checkFailure(stat(argv[i], buffer));
       if (!S_ISREG(buffer->st_mode))
       { // skips file if not regular
         // printf("File '%s' is not regular\n", argv[i]);
@@ -132,31 +132,28 @@ int main(int argc, char *argv[])
   strncpy(server.sun_path, SOCKNAME, UNIX_PATH_MAX);
   server.sun_family = AF_UNIX;
 
-  // child process
+  // ------ START OF CHILD PROCESS ------
   pid_t Collector = fork();
   if (Collector == 0)
   {
     Data collected;
-    sigset_t set2;
-    int s_sck, fd_c;
     char prevbadoutput[MAX_STRING_SIZE] = "";
 
     // blocking SIGHUP, SIGINT, SIGQUIT, SIGTERM
-    checkErr(sigemptyset(&set2));
-    checkErr(sigaddset(&set2, SIGINT));
-    checkErr(sigaddset(&set2, SIGQUIT));
-    checkErr(sigaddset(&set2, SIGTERM));
-    checkErr(sigaddset(&set2, SIGHUP));
-    checkErr(pthread_sigmask(SIG_BLOCK, &set2, NULL));
+    checkFailure(sigaddset(&set, SIGINT));
+    checkFailure(sigaddset(&set, SIGQUIT));
+    checkFailure(sigaddset(&set, SIGTERM));
+    checkFailure(sigaddset(&set, SIGHUP));
+    checkFailure(pthread_sigmask(SIG_BLOCK, &set, NULL));
 
-    s_sck = socket(AF_UNIX, SOCK_STREAM, 0);
+    int s_sck = socket(AF_UNIX, SOCK_STREAM, 0);
     bind(s_sck, (struct sockaddr *)&server, sizeof(server));
     listen(s_sck, SOMAXCONN);
-    fd_c = accept(s_sck, NULL, 0);
+    int fd_c = accept(s_sck, NULL, 0);
 
     while (j > 0)
     {
-      checkErr(read(fd_c, &collected, sizeof(Data)));
+      checkFailure(read(fd_c, &collected, sizeof(Data)));
       /*
         When a signal is received by masterworker, if there are threads that are
         already in queue (usually it's the case), those threads finish to work
@@ -177,6 +174,7 @@ int main(int argc, char *argv[])
     unlink(SOCKNAME);
     exit(EXIT_SUCCESS);
   }
+  // ------ END OF CHILD PROCESS ------
 
   fd_skt = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -223,12 +221,12 @@ int main(int argc, char *argv[])
 
 void *elaborate(void *arg)
 {
+  Data data = {}; 
   int fileSize = 0;
   long n = 0, result = 0;
+  FILE *fd;
   char *processedFile;
   struct stat *buffer;
-  Data data = {};
-  FILE *fd;
 
   while (1)
   {
@@ -256,7 +254,7 @@ void *elaborate(void *arg)
 
     buffer = (struct stat *)calloc(1, sizeof(struct stat));
 
-    checkErr(stat(processedFile, buffer));
+    checkFailure(stat(processedFile, buffer));
     fileSize = buffer->st_size;
 
     free(buffer); // free dynamic memory used
@@ -283,7 +281,7 @@ void *elaborate(void *arg)
     strcpy(data.filename, processedFile);
     data.result = result;
 
-    checkErr(write(fd_skt, &data, sizeof(data))); // sends results to collector
+    checkFailure(write(fd_skt, &data, sizeof(data))); // sends results to collector
 
     free(processedFile); // free dynamic memory used
     result = 0;
